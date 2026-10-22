@@ -331,13 +331,9 @@ def build_docx(info, result, photos) -> bytes:
 
 
 # ───────── SharePoint 저장 (Power Automate 플로우 B 호출) ─────────
-def push_flow(site, file_name, docx_bytes, photos):
-    base = file_name.rsplit(".", 1)[0]
-    body = {
-        "site": site, "fileName": file_name, "docxBase64": base64.b64encode(docx_bytes).decode(),
-        "photos": [{"name": f"{base}_사진{i + 1}.jpg", "base64": base64.b64encode(p).decode()}
-                   for i, p in enumerate(photos)],
-    }
+def push_flow(site, file_name, docx_bytes, photos=None):
+    # 사진은 Word 보고서 안에 들어 있으므로 SharePoint에는 .docx만 저장한다.
+    body = {"site": site, "fileName": file_name, "docxBase64": base64.b64encode(docx_bytes).decode(), "photos": []}
     r = requests.post(st.secrets["UPLOAD_URL"], json=body, timeout=110)
     r.raise_for_status()
 
