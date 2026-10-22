@@ -8,7 +8,7 @@ import requests
 import streamlit as st
 from docx import Document
 from docx.enum.section import WD_ORIENT
-from docx.enum.table import WD_TABLE_ALIGNMENT
+from docx.enum.table import WD_ALIGN_VERTICAL, WD_TABLE_ALIGNMENT
 from docx.enum.text import WD_ALIGN_PARAGRAPH
 from docx.oxml import OxmlElement
 from docx.oxml.ns import qn
@@ -101,6 +101,7 @@ def shade(c, hex_fill):
 
 
 def cell(c, text, bold=False, size=8.5, center=False, fill=None):
+    c.vertical_alignment = WD_ALIGN_VERTICAL.CENTER  # 세로 가운데 (가로 정렬은 그대로)
     c.text = ""
     p = c.paragraphs[0]
     lines = str(text).split("\n")
