@@ -116,13 +116,68 @@ def cell(c, text, bold=False, size=8.5, center=False, fill=None):
         shade(c, fill)
 
 
+BORDER = "C9CED6"
+
+
+def borders(tbl, color=BORDER, sz=4):
+    tblPr = tbl._tbl.tblPr
+    old = tblPr.find(qn("w:tblBorders"))
+    if old is not None:
+        tblPr.remove(old)
+    b = OxmlElement("w:tblBorders")
+    for e in ("top", "left", "bottom", "right", "insideH", "insideV"):
+        x = OxmlElement(f"w:{e}")
+        x.set(qn("w:val"), "single")
+        x.set(qn("w:sz"), str(sz))
+        x.set(qn("w:space"), "0")
+        x.set(qn("w:color"), color)
+        b.append(x)
+    tblPr.append(b)
+
+
+def para_border(p, side="bottom", color="222222", sz=8):
+    pPr = p._p.get_or_add_pPr()
+    pb = OxmlElement("w:pBdr")
+    x = OxmlElement(f"w:{side}")
+    x.set(qn("w:val"), "single")
+    x.set(qn("w:sz"), str(sz))
+    x.set(qn("w:space"), "1")
+    x.set(qn("w:color"), color)
+    pb.append(x)
+    pPr.append(pb)
+
+
+def widths(tbl, ws):
+    tbl.autofit = False
+    tblPr = tbl._tbl.tblPr
+    for tag in ("w:tblW", "w:tblLayout"):
+        e = tblPr.find(qn(tag))
+        if e is not None:
+            tblPr.remove(e)
+    w = OxmlElement("w:tblW")
+    w.set(qn("w:w"), str(int(sum(ws) * 567)))
+    w.set(qn("w:type"), "dxa")
+    tblPr.append(w)
+    lay = OxmlElement("w:tblLayout")
+    lay.set(qn("w:type"), "fixed")
+    tblPr.append(lay)
+    for gc, x in zip(tbl._tbl.tblGrid.findall(qn("w:gridCol")), ws):
+        gc.set(qn("w:w"), str(int(x * 567)))
+    for row in tbl.rows:
+        for j, x in enumerate(ws):
+            if j < len(row.cells):
+                row.cells[j].width = Cm(x)
+
+
 def heading(doc, text):
     p = doc.add_paragraph()
     r = p.add_run(text)
     r.bold = True
     r.font.size = Pt(12)
-    p.paragraph_format.space_before = Pt(10)
-    p.paragraph_format.space_after = Pt(3)
+    p.paragraph_format.space_before = Pt(12)
+    p.paragraph_format.space_after = Pt(4)
+    para_border(p, "bottom")
+    p.paragraph_format.keep_with_next = True
 
 
 def note(doc, text, size=8.5, bold_label=None):
@@ -167,10 +222,8 @@ def build_docx(info, result, photos) -> bytes:
     cell(sg.rows[1].cells[0], info["assessor"], False, 9, True)
     cell(sg.rows[1].cells[1], "", False, 9, True)
     sg.rows[1].height = Cm(1.2)
-    sg.autofit = False
-    for row in sg.rows:
-        for c in row.cells:
-            c.width = Cm(3.0)
+    borders(sg)
+    widths(sg, [2.6, 2.6])
 
     heading(doc, "1. 평가 개요")
     ov = doc.add_table(rows=5, cols=4)
@@ -187,6 +240,8 @@ def build_docx(info, result, photos) -> bytes:
             cell(ov.rows[i].cells[j], v, bold=(j % 2 == 0), size=9, fill="EEF1F4" if j % 2 == 0 else None)
     cell(ov.rows[4].cells[0], "평가 결과", True, 9, fill="EEF1F4")
     mc = ov.rows[4].cells[1].merge(ov.rows[4].cells[3])
+    borders(ov)
+    widths(ov, [3.0, 9.0, 3.0, 11.7])
     cell(mc, f"유해·위험요인 {len(hz)}건, 허용 불가 수준 {bad}건" + (f"\n{result['summary']}" if result["summary"] else ""), size=9)
 
     heading(doc, "2. 평가 기준")
@@ -200,6 +255,8 @@ def build_docx(info, result, photos) -> bytes:
             cell(c[0], name if k == 0 else "", True, 9, fill="EEF1F4")
             cell(c[1], k + 1, False, 9, True)
             cell(c[2], txt, False, 9)
+    borders(cr)
+    widths(cr, [4.0, 2.5, 20.2])
     note(doc, f"위험성 = 발생가능성 × 심각성 (1~{len(F_SCALE) * len(S_SCALE)}점). {ALLOW}점 이하는 허용 가능, "
               f"{URGENT}점 이상은 즉시 개선, 그 사이는 개선 필요로 보고 개선대책을 수립·이행합니다.")
 
@@ -228,10 +285,8 @@ def build_docx(info, result, photos) -> bytes:
             cell(c[9], f"{a}\n{la}", bold=True, center=True, fill=fa)
             cell(c[10], "-")
             cell(c[11], "미완료", center=True)
-        widths = [1.0, 2.4, 3.8, 3.2, 1.0, 1.0, 1.8, 4.0, 4.0, 1.8, 1.7, 1.3]
-        for row in tb.rows:
-            for j, w in enumerate(widths):
-                row.cells[j].width = Cm(w)
+        borders(tb)
+        widths(tb, [1.0, 2.4, 3.8, 3.2, 1.0, 1.0, 1.8, 4.0, 4.0, 1.8, 1.7, 1.3])
     else:
         doc.add_paragraph("등록된 위험요인이 없습니다.")
     if result["unsure"]:
@@ -242,6 +297,7 @@ def build_docx(info, result, photos) -> bytes:
         cols = 3
         pt = doc.add_table(rows=(len(photos) + cols - 1) // cols, cols=cols)
         pt.style = "Table Grid"
+        borders(pt)
         for i, p in enumerate(photos):
             c = pt.rows[i // cols].cells[i % cols]
             c.text = ""
@@ -255,13 +311,17 @@ def build_docx(info, result, photos) -> bytes:
     heading(doc, "5. 근로자 참여 및 결과 공유")
     pr = doc.add_table(rows=2, cols=4)
     pr.style = "Table Grid"
+    borders(pr)
+    widths(pr, [3.5, 9.8, 3.5, 9.9])
     vals = [("참여 근로자", info["workers"] or "-", "근로자대표", info["rep"] or "-"),
             ("참여 방법", ", ".join(info["part"]) or "-", "결과 공유", info["share"] or "-")]
     for i, rw in enumerate(vals):
         for j, v in enumerate(rw):
             cell(pr.rows[i].cells[j], v, bold=(j % 2 == 0), size=9, fill="EEF1F4" if j % 2 == 0 else None)
 
-    note(doc, FOOT, 8)
+    fp = note(doc, FOOT, 8)
+    para_border(fp, "top", BORDER, 6)
+    fp.paragraph_format.space_before = Pt(10)
     n = note(doc, DISCLAIMER, 8)
     n.runs[0].font.color.rgb = RGBColor(0x5A, 0x64, 0x70)
 
